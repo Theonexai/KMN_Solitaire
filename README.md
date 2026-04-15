@@ -2,7 +2,7 @@
 
 A classic Klondike solitaire game built as a static website with HTML, CSS, and JavaScript. It has no external dependencies and can be hosted from any static web server.
 
-## Execute local
+## Run locally
 
 Open `index.html` directly in a browser.
 
