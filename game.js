@@ -33,7 +33,31 @@ const state = {
   history: [],
 };
 
-const leaveWarningStorageKey = "classic-solitaire-skip-leave-warning";
+const SAVE_KEY="hopmint:solitaire:v1";
+let elapsedMs=0, activeSince=null, storageOK=true;
+function notice(text){document.getElementById('move-status').textContent=text;}
+function clockMs(){return elapsedMs+(activeSince===null?0:Date.now()-activeSince);}
+function pauseClock(){elapsedMs=clockMs();activeSince=null;}
+function snapshot(){return structuredClone({stock:state.stock,waste:state.waste,foundations:state.foundations,tableau:state.tableau,moves:state.moves});}
+function validSnapshot(s){
+ if(!s||!Number.isInteger(s.moves)||s.moves<0||!Array.isArray(s.stock)||!Array.isArray(s.waste)||!Array.isArray(s.tableau)||s.tableau.length!==7||!Array.isArray(s.foundations)||s.foundations.length!==4)return false;
+ const piles=[s.stock,s.waste,...s.tableau,...s.foundations];if(piles.some(p=>!Array.isArray(p)))return false;
+ const cards=piles.flat(),canonical=new Map(createDeck().map(c=>[c.id,c]));
+ if(cards.length!==52||new Set(cards.map(c=>c?.id)).size!==52)return false;
+ if(cards.some(c=>!c||typeof c.faceUp!=='boolean'||!canonical.has(c.id)||['suit','rank','value','color','symbol'].some(k=>c[k]!==canonical.get(c.id)[k])))return false;
+ if(s.stock.some(c=>c.faceUp)||s.waste.some(c=>!c.faceUp))return false;
+ if(s.foundations.some((p,i)=>p.some((c,j)=>!c.faceUp||c.suit!==suits[i].id||c.value!==j+1)))return false;
+ return s.tableau.every(p=>{const first=p.findIndex(c=>c.faceUp);return !p.length||(first>=0&&p.slice(first).every(c=>c.faceUp)&&isValidSequence(p.slice(first)));});
+}
+function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({version:1,game:snapshot(),elapsedMs:clockMs(),history:state.history.slice(-80)}));storageOK=true;}catch{storageOK=false;}document.getElementById('save-status').textContent=storageOK?'Saved on this device':'Saving unavailable — keep this tab open to retain your hand.';}
+function restoreGame(){try{const raw=JSON.parse(localStorage.getItem(SAVE_KEY));if(!raw)return false;if(raw.version!==1||!validSnapshot(raw.game)||!Number.isFinite(raw.elapsedMs)||raw.elapsedMs<0)throw new Error('Invalid save');Object.assign(state,raw.game);state.history=Array.isArray(raw.history)?raw.history.slice(-80).filter(validSnapshot):[];elapsedMs=raw.elapsedMs;activeSince=document.hidden||hasFinishedGame()?null:Date.now();state.timerId=setInterval(updateTimer,1000);render();return true;}catch{notice('The previous hand could not be restored. A new hand has been dealt.');return false;}}
+function selectCard(location){
+ const move=buildMove(location);if(!move)return;
+ if(state.dragged){if(state.dragged.cards[0].id===move.cards[0].id){state.dragged=null;render();notice('Selection cleared.');return;}placeSelection(location.source,location.source==='tableau'?location.column:location.pile);return;}
+ state.dragged=move;render();notice('Card selected. Choose a marked destination; Escape cancels.');
+}
+function placeSelection(type,index){if(!state.dragged)return;if(!canDrop(type,index)){notice('That move is not allowed. Choose a marked destination.');return;}moveDragged(type,index);notice('Card moved.');}
+
 
 const els = {
   stock: document.querySelector("#stock"),
@@ -83,6 +107,7 @@ function startGame() {
   state.tableau = [[], [], [], [], [], [], []];
   state.moves = 0;
   state.startedAt = Date.now();
+  elapsedMs=0;activeSince=document.hidden?null:Date.now();
   state.dragged = null;
   state.history = [];
 
@@ -100,13 +125,17 @@ function startGame() {
 }
 
 function render() {
+ const focused=document.activeElement?.dataset.cardId;
   renderStock();
   renderWaste();
   renderFoundations();
   renderTableau();
-  els.moves.textContent = `${state.moves} ${state.moves === 1 ? "movimiento" : "movimientos"}`;
+  els.moves.textContent = `${state.moves} ${state.moves === 1 ? "move" : "moves"}`;
   els.undo.disabled = state.history.length === 0;
   updateTimer();
+ document.querySelectorAll('[data-card-id]').forEach(el=>{const selected=state.dragged?.cards.some(c=>c.id===el.dataset.cardId)||false;el.classList.toggle('selected-card',selected);el.setAttribute('aria-pressed',String(selected));});
+ if(focused)document.querySelector(`[data-card-id="${focused}"]`)?.focus({preventScroll:true});
+ persist();
 }
 
 function renderStock() {
@@ -114,7 +143,7 @@ function renderStock() {
   els.stockCount.textContent = String(state.stock.length);
   els.stock.setAttribute(
     "aria-label",
-    state.stock.length > 0 ? `Robar carta, quedan ${state.stock.length}` : "Reiniciar descarte, mazo vacio"
+    state.stock.length > 0 ? `Draw a card, ${state.stock.length} remaining` : "Recycle waste, stock empty"
   );
 }
 
@@ -136,7 +165,7 @@ function renderWaste() {
     cardEl.style.zIndex = String(visibleIndex + 1);
     els.waste.append(cardEl);
   });
-  attachDropTarget(els.waste, "waste");
+
 }
 
 function renderFoundations() {
@@ -146,7 +175,7 @@ function renderFoundations() {
     foundation.className = "pile foundation";
     foundation.dataset.foundation = String(index);
     foundation.dataset.suit = suits[index].id;
-    foundation.setAttribute("aria-label", `Fundacion de ${suits[index].id}`);
+    foundation.setAttribute("aria-label", `${suits[index].id} foundation`);
     attachDropTarget(foundation, "foundation", index);
 
     const topCard = pile.at(-1);
@@ -163,7 +192,7 @@ function renderTableau() {
     const column = document.createElement("div");
     column.className = `column${columnCards.length === 0 ? " empty" : ""}`;
     column.dataset.column = String(columnIndex);
-    column.setAttribute("aria-label", `Columna ${columnIndex + 1}`);
+    column.setAttribute("aria-label", `Column ${columnIndex + 1}`);
     attachDropTarget(column, "tableau", columnIndex);
 
     columnCards.forEach((card, cardIndex) => {
@@ -176,6 +205,7 @@ function renderTableau() {
       column.append(cardEl);
     });
 
+    column.style.minHeight = `${Math.max(0, columnCards.length - 1) * stackOffset() + els.stock.getBoundingClientRect().height}px`;
     els.tableau.append(column);
   });
 }
@@ -187,29 +217,36 @@ function createCardElement(card, location, options = {}) {
   cardEl.dataset.cardId = card.id;
   if (interactive) {
     cardEl.setAttribute("role", "button");
-    cardEl.setAttribute("aria-label", card.faceUp ? `${card.rank} de ${card.suit}` : "Carta boca abajo");
+    cardEl.setAttribute("aria-label", card.faceUp ? `${card.rank} of ${card.suit}` : "Face-down card");
   } else {
     cardEl.classList.add("preview");
     cardEl.setAttribute("aria-hidden", "true");
   }
 
   if (card.faceUp && interactive) {
+    cardEl.tabIndex = 0;
     cardEl.draggable = canDrag(location);
+    cardEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();selectCard(location);
+      }
+    });
     cardEl.innerHTML = `
-      <span class="rank">${card.rank}</span>
+      <span class="rank">${card.rank}<span class="corner-suit">${card.symbol}</span></span>
       <span class="center-suit">${card.symbol}</span>
       <span class="suit">${card.symbol}</span>
     `;
     cardEl.addEventListener("click", (event) => {
       event.stopPropagation();
-      autoMove(location);
+      selectCard(location);
     });
     cardEl.addEventListener("dragstart", (event) => onDragStart(event, location));
     cardEl.addEventListener("dragend", onDragEnd);
-    cardEl.addEventListener("dblclick", () => autoFoundation(location));
+
   } else if (card.faceUp) {
     cardEl.innerHTML = `
-      <span class="rank">${card.rank}</span>
+      <span class="rank">${card.rank}<span class="corner-suit">${card.symbol}</span></span>
       <span class="center-suit">${card.symbol}</span>
       <span class="suit">${card.symbol}</span>
     `;
@@ -219,6 +256,11 @@ function createCardElement(card, location, options = {}) {
 }
 
 function attachDropTarget(element, type, index = null) {
+ element.tabIndex=0;element.setAttribute('role','button');
+ element.classList.toggle('legal-destination',canDrop(type,index));
+ if(canDrop(type,index))element.setAttribute('aria-label',element.getAttribute('aria-label')+', valid destination');
+ element.addEventListener('click',()=>placeSelection(type,index));
+ element.addEventListener('keydown',e=>{if(e.target===element&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeSelection(type,index);}});
   element.addEventListener("dragover", (event) => {
     if (canDrop(type, index)) {
       event.preventDefault();
@@ -277,7 +319,7 @@ function canDrop(type, index) {
   if (!move) return false;
   if (type === "waste") return false;
   if (type === "foundation") return canMoveToFoundation(move.cards, index);
-  if (type === "tableau") return canMoveToTableau(move.cards, index);
+  if (type === "tableau") return !isSameTableauSource(move,index)&&canMoveToTableau(move.cards, index);
   return false;
 }
 
@@ -351,6 +393,7 @@ function flipAvailableCards() {
 }
 
 function drawFromStock() {
+ state.dragged=null;
   if (state.stock.length > 0) {
     saveHistory();
     const card = state.stock.pop();
@@ -402,8 +445,8 @@ function isSameTableauSource(move, columnIndex) {
 function checkWin() {
   const completed = state.foundations.every((pile) => pile.length === 13);
   if (!completed) return;
-  clearInterval(state.timerId);
-  els.winSummary.textContent = `Has terminado en ${state.moves} movimientos y ${formatTime(elapsedSeconds())}.`;
+  pauseClock();persist();clearInterval(state.timerId);
+  els.winSummary.textContent = `Finished in ${state.moves} moves and ${formatTime(elapsedSeconds())}.`;
   els.winDialog.showModal();
 }
 
@@ -419,6 +462,7 @@ function saveHistory() {
     tableau: state.tableau.map(cloneCards),
     moves: state.moves,
   });
+ state.history=state.history.slice(-80);
 }
 
 function undoMove() {
@@ -430,6 +474,7 @@ function undoMove() {
   state.tableau = previous.tableau;
   state.moves = previous.moves;
   state.dragged = null;
+ if(!document.hidden&&activeSince===null)activeSince=Date.now();clearInterval(state.timerId);state.timerId=setInterval(updateTimer,1000);
   render();
 }
 
@@ -442,8 +487,7 @@ function updateTimer() {
 }
 
 function elapsedSeconds() {
-  if (!state.startedAt) return 0;
-  return Math.floor((Date.now() - state.startedAt) / 1000);
+  return Math.floor(clockMs()/1000);
 }
 
 function formatTime(totalSeconds) {
@@ -457,31 +501,22 @@ function stackOffset() {
 }
 
 function wasteSpread() {
-  return window.matchMedia("(max-width: 780px)").matches ? 18 : 30;
+  return (els.waste.getBoundingClientRect().width - els.stock.getBoundingClientRect().width) / 2;
 }
 
 els.stock.addEventListener("click", drawFromStock);
 els.undo.addEventListener("click", undoMove);
-els.newGame.addEventListener("click", startGame);
+els.newGame.addEventListener("click",()=>{if(state.moves>0&&!hasFinishedGame())document.getElementById('restart-dialog').showModal();else startGame();});
+document.getElementById('cancel-restart').onclick=()=>document.getElementById('restart-dialog').close();
+document.getElementById('confirm-restart').onclick=()=>{document.getElementById('restart-dialog').close();startGame();};
 els.playAgain.addEventListener("click", () => {
   els.winDialog.close();
   startGame();
 });
-els.skipLeaveWarning.checked = localStorage.getItem(leaveWarningStorageKey) === "true";
-els.skipLeaveWarning.addEventListener("change", () => {
-  localStorage.setItem(leaveWarningStorageKey, String(els.skipLeaveWarning.checked));
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Tab" && !els.winDialog.open) {
-    event.preventDefault();
-    document.activeElement?.blur();
-  }
-});
-window.addEventListener("beforeunload", (event) => {
-  if (els.skipLeaveWarning.checked || hasFinishedGame()) return;
-  event.preventDefault();
-  event.returnValue = "Seguro que quieres abandonar la pagina? Perderas la partida.";
-});
-window.addEventListener("resize", render);
-
-startGame();
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.dragged){state.dragged=null;render();notice('Selection cleared.');}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseClock();persist();}else if(!hasFinishedGame())activeSince=Date.now();});
+window.addEventListener('pagehide',()=>{pauseClock();persist();});
+window.addEventListener('pageshow',()=>{if(!document.hidden&&!hasFinishedGame()&&activeSince===null)activeSince=Date.now();});
+window.addEventListener('resize',render);
+setInterval(persist,5000);
+if(!restoreGame())startGame();

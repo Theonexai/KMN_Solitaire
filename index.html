@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,56 +8,64 @@
       content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
     >
     <meta name="referrer" content="no-referrer">
-    <title>Classic Solitaire</title>
-    <link rel="stylesheet" href="./styles.css">
+    <meta name="theme-color" content="#153435">
+    <meta name="description" content="Play classic Klondike Solitaire on HopMint Games. Draw one card, build alternating-color sequences, and complete all four foundations.">
+    <title>Solitaire | HopMint Games</title>
+    <link rel="icon" href="./assets/hopmint-icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=2">
   </head>
   <body>
     <main class="game-shell">
+      <div class="site-header">
+        <a class="brand" href="#game" aria-label="HopMint Games home"><span class="brand-mark" aria-hidden="true">H</span><span>HopMint <span class="brand-light">Games</span></span></a>
+        <span class="header-note">A little time to unwind</span>
+      </div>
       <header class="topbar">
         <div>
-          <p class="eyebrow">Classic Solitaire</p>
-          <h1>Solitario</h1>
+          <p class="eyebrow">THE CLASSIC CARD GAME</p>
+          <h1>Solitaire</h1>
         </div>
         <div class="status" aria-live="polite">
-          <span id="moves">0 movimientos</span>
-          <span id="timer">00:00</span>
+          <span id="moves">0 moves</span>
+          <span id="timer" aria-label="Elapsed time">00:00</span>
         </div>
-        <button id="undo" class="new-game" type="button" tabindex="-1" disabled>Deshacer</button>
-        <button id="new-game" class="new-game" type="button" tabindex="-1">Nueva partida</button>
+        <button id="undo" class="new-game secondary" type="button" disabled>Undo</button>
+        <button id="new-game" class="new-game" type="button">New game</button>
       </header>
 
-      <section class="board" aria-label="Mesa de solitario">
+      <section class="board" id="game" aria-label="Solitaire board">
         <div class="upper-row">
-          <div class="draw-area" aria-label="Mazo y descarte">
-            <button id="stock" class="pile stock" type="button" tabindex="-1" aria-label="Robar carta">
+          <div class="draw-area" aria-label="Stock and waste">
+            <button id="stock" class="pile stock" type="button" aria-label="Draw a card">
               <span id="stock-count" class="stock-count">24</span>
             </button>
-            <div id="waste" class="pile waste" aria-label="Descarte"></div>
+            <div id="waste" class="pile waste" aria-label="Waste pile"></div>
           </div>
 
-          <div id="foundations" class="foundations" aria-label="Fundaciones"></div>
+          <div id="foundations" class="foundations" aria-label="Foundations"></div>
         </div>
 
-        <div id="tableau" class="tableau" aria-label="Columnas"></div>
+        <div id="tableau" class="tableau" aria-label="Seven tableau columns"></div>
       </section>
 
+      <p id="move-status" role="status" aria-live="polite">Select a card, then choose its destination.</p>
       <section class="help-panel">
-        <h2>Como jugar</h2>
-        <p>Roba del mazo, alterna colores en las columnas y sube cada palo a su fundacion desde el as hasta el rey.</p>
-        <p>Toca una carta para moverla automaticamente si hay un destino valido, o arrastra cartas y secuencias.</p>
-        <label class="leave-warning">
-          <input id="skip-leave-warning" type="checkbox">
-          No volver a preguntar al salir o recargar
-        </label>
+        <h2>How to play</h2>
+        <p>Draw one card from the stock. Build tableau sequences in descending order with alternating colors. Build each foundation by suit from ace to king. Only kings can fill empty columns.</p>
+        <p>Tap a card or stack, then tap a marked destination. Tap it again or press Escape to cancel. You can also drag cards and sequences. Tap the empty stock to recycle the waste.</p>
+        <p id="save-status" role="status"></p>
       </section>
 
+      <dialog id="restart-dialog" aria-labelledby="restart-title"><h2 id="restart-title">Start a new hand?</h2><p>Your unfinished hand will be replaced.</p><button id="cancel-restart" class="new-game" autofocus>Keep playing</button><button id="confirm-restart" class="new-game">New hand</button></dialog>
       <dialog id="win-dialog" class="win-dialog">
-        <h2>Partida completada</h2>
+        <h2>Game complete!</h2>
         <p id="win-summary"></p>
-        <button id="play-again" class="new-game" type="button">Jugar otra vez</button>
+        <button id="play-again" class="new-game" type="button">Play again</button>
       </dialog>
+      <footer class="site-footer">HopMint Games adaptation. Original Solitaire © 2026 AJimber. <a href="./LICENSE">MIT License and copyright notice</a>.</footer>
     </main>
 
-    <script src="./game.js" defer></script>
+    <script src="./game.js?v=2" defer></script>
   </body>
 </html>
+

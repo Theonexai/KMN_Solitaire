@@ -1,6 +1,8 @@
-# Classic Solitaire
+# HopMint Games Solitaire
 
 A classic Klondike solitaire game built as a static website with HTML, CSS, and JavaScript. It has no external dependencies and can be hosted from any static web server.
+
+The English HopMint interface uses compact controls and seven responsive tableau columns, including at 320px width. The draw mode remains draw-one. Cards support tap-to-move and desktop drag-and-drop; keyboard users can Tab to controls and face-up cards, then press Enter or Space to activate them.
 
 ## Run locally
 
@@ -26,6 +28,8 @@ The game state lives in browser memory. There are no accounts, forms, cookies, d
 ## License
 
 MIT License. See `LICENSE` for details.
+
+The original copyright notice remains unchanged. Bundled Clear Sans fonts match the HopMint 2048 reference; their Apache 2.0 license and embedded attribution are in `assets/fonts/LICENSE.txt` and `assets/fonts/NOTICE.txt`.
 
 ## Secure static hosting
 

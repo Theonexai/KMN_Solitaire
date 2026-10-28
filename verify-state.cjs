@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{webcrypto}=require('node:crypto');
+const source=fs.readFileSync(require('node:path').join(__dirname,'game.js'),'utf8').split('els.stock.addEventListener')[0];const saved=new Map(),nodes=new Map();let now=1000;const listeners={};const ctx=vm.createContext({structuredClone,crypto:webcrypto,Date:{now:()=>now},setInterval:()=>1,clearInterval:()=>{},localStorage:{setItem:(k,v)=>saved.set(k,v),getItem:k=>saved.get(k)||null},document:{hidden:false,querySelector:()=>({}),getElementById:id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id)}},window:{matchMedia:()=>({matches:false})},console});vm.runInContext(source+'\nrender=()=>{};',ctx);const run=s=>vm.runInContext(s,ctx);
+run('startGame()');assert(run('validSnapshot(snapshot())'));for(let i=0;i<24;i++)run('drawFromStock()');assert.equal(run('state.stock.length'),0);run('drawFromStock()');assert.equal(run('state.stock.length'),24);assert(run('validSnapshot(snapshot())'));run('undoMove()');assert.equal(run('state.stock.length'),0);assert(run('validSnapshot(snapshot())'));
+run('persist()');const original=run('JSON.stringify(snapshot())');run('startGame();restoreGame()');assert.equal(run('JSON.stringify(snapshot())'),original);assert(run('state.history.length>0'));run('undoMove()');assert(run('validSnapshot(snapshot())'));
+assert.equal(run('(()=>{const s=snapshot();s.stock.push(s.waste[0]);return validSnapshot(s)})()'),false);
+run('startGame()');now+=4000;assert.equal(run('elapsedSeconds()'),4);run('pauseClock()');now+=8000;assert.equal(run('elapsedSeconds()'),4);run('activeSince=Date.now()');now+=2000;assert.equal(run('elapsedSeconds()'),6);
+run("state.dragged={from:{source:'tableau',column:0,index:0},cards:state.tableau[0]}");assert.equal(run("canDrop('tableau',0)"),false);
+run("localStorage.setItem=()=>{throw new Error('blocked')};persist()");assert.match(nodes.get('save-status').textContent,/unavailable/);
+console.log('PASS 52-card validation, draw/recycle/undo, saved hand and undo history, malformed save rejection, hidden-time clock accounting, same-column rejection, storage failure notice');
+
